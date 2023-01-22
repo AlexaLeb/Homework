@@ -1,130 +1,131 @@
-from pprint import pprint
+import psycopg2
 
-import requests
+class DataBase():
+    def __init__(self, conn):
+        self.conn = conn
+
+    def create_db(self):
+        with conn.cursor() as cur:
+            cur.execute('''
+            DROP TABLE tell;
+            DROP TABLE client;
+            ''')
+
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS client(
+                id SERIAL PRIMARY KEY,
+                first_name VARCHAR(40) NOT NULL,
+                last_name VARCHAR(40) NOT NULL,
+                email VARCHAR(40) NOT NULL,
+                phones_amount INTEGER
+            );
+            """)
+
+            cur.execute("""
+            CREATE TABLE IF NOT EXISTS tell(
+                id SERIAL PRIMARY KEY,
+                number INTEGER NOT NULL,
+                client_id INTEGER NOT NULL REFERENCES client(id)
+            );
+            """)
+        print('Таблицы созданы')
+
+    def add_client(self, first_name, last_name, email, phones=0):
+        with conn.cursor() as cur:
+            cur.execute('''
+            INSERT INTO client(first_name, last_name, email, phones_amount) VALUES(%s, %s, %s, %s);
+            ''', (first_name, last_name, email, phones))
+        print('клиент добавлен')
+
+    def add_phone(self, phone, client_id,):
+        with conn.cursor() as cur:
+            cur.execute('''
+            INSERT INTO tell(number, client_id) VALUES(%s, %s);
+            ''', (phone, client_id))
+        print('телефон добавлен')
+
+    def change_client(self, client_id, first_name=None, last_name=None, email=None, phones=None):
+        with conn.cursor() as cur:
+            point = input('''
+            Какие данные о клиенте нужно изменить? Введите: 
+            f - изменить имя
+            l - изменить фамилию
+            e - изменить почту
+            t - изменить количество телефонов у клиента
+            ''')
+            if point == 'f':
+                cur.execute('''
+                UPDATE client SET first_name = %s
+                WHERE id = %s;
+                ''', (first_name, client_id))
+                print('Успешно изменено')
+            elif point == 'l':
+                cur.execute('''
+                UPDATE client SET last_name = %s
+                WHERE id = %s;
+                ''', (last_name, client_id))
+                print('Успешно изменено')
+            elif point == 'e':
+                cur.execute('''
+                UPDATE client SET email = %s
+                WHERE id = %s;
+                ''', (email, client_id))
+                print('Успешно изменено')
+            elif point == 't':
+                cur.execute('''
+                UPDATE client SET phones_amount = %s
+                WHERE id = %s;
+                ''', (phones, client_id))
+                print('Успешно изменено')
+            else:
+                print('неизвестная команда')
+
+    def delete_phone(self, client_id, phone):
+        with conn.cursor() as cur:
+            cur.execute('''
+            SELECT number FROM tell
+            WHERE client_id=%s
+            LIMIT 1;
+            ''', (client_id,)) #если такого клиента нет, то код выдаст ошибку
+
+            cur.execute('''
+            DELETE FROM tell 
+            WHERE number=%s;
+            ''', (phone,))
+        print(f'телефон {phone} успешно удален')
+
+    def delete_client(self, client_id):
+        with conn.cursor() as cur:
+            cur.execute('''
+            DELETE FROM tell
+            WHERE client_id=%s;
+            ''', (client_id,))
+
+            cur.execute('''
+            DELETE FROM client
+            WHERE id=%s;
+            ''', (client_id,))
+        print('Пользователь удален')
+
+    def find_client(self, first_name=None, last_name=None, email=None, phone=None):
+        pass
 
 
-class YaUploader:
-    def __init__(self, tooken: str):
-        self.token = tooken
+with psycopg2.connect(database="dvdrental", user="postgres", password="1207") as conn:
+    data = DataBase(conn)
+    # data.create_db()
+    # data.add_client("sasha", "lebedev", 'email')
+    # data.add_client("gerald", "witcher", 'emaill', 5)
+    # data.add_phone(1111, 1)
+    # data.add_phone(1121, 1)
+    # data.add_phone(1131, 2)
+    # data.add_phone(1541, 2)
+    # data.change_client(2, 'Лютик')
+    # data.change_client(2, last_name='Бард')
+    # data.change_client(2, email='лютиклучший')
+    # data.change_client(1, phones=4)
+    # data.change_client(1, email='sasha')
+    # data.delete_phone(2, 1131)
+    # data.delete_client(2)
 
-    files_url = "https://cloud-api.yandex.net/v1/disk/resources/files"
-    upload_url = "https://cloud-api.yandex.net/v1/disk/resources/upload"
-
-    @property
-    def headers(self) -> dict:
-        return {
-            "Content-Type": "application/json",
-            "Authorization": f"OAuth {self.token}"
-        }
-
-    def get_upload_link(self, file_path: str) -> dict:
-        params = {"path": file_path, "overwrite": "true"}
-        response = requests.get(self.upload_url, params=params, headers=self.headers)
-        jsonify = response.json()
-        pprint(jsonify)
-        return jsonify
-
-
-    def upload(self, file_path: str):
-        """Метод загружает файлы по списку file_list на яндекс диск"""
-        href = self.get_upload_link(file_path).get("href")
-        if not href:
-            return
-
-        with open(file_path, 'rb') as file:
-            response = requests.put(href, data=file)
-            if response.status_code == 201:
-                print("файл загружен")
-                return True
-            print("файл не загружен потому что", response.status_code)
-            return False
-
-
-class VkRequester:
-    def __init__(self, token: str, id):
-        self.token = token
-        self.id = id
-
-    def get_request(self,amount=5): #функция делает запрос, находит числовой id в ВК и выдает информациию о аватарках пользователя
-        # params = {
-        #     "access_token": self.token,
-        #     'owner_id': self.id,
-        #     "v": '5.131',
-        #     'album_id': 'profile',
-        #     'extended': '1'
-        # }
-        resp = requests.get("https://api.vk.com/method/users.get", params={
-            "access_token": self.token,
-            'user_ids': self.id,
-            "v": '5.131',
-        }).json()
-        for i in  resp['response']:
-            ids = i['id']
-        response = requests.get("https://api.vk.com/method/photos.get", params={
-            "access_token": self.token,
-            'owner_id': ids,
-            "v": '5.131',
-            'album_id': 'profile',
-            'extended': '1',
-            'count': amount
-        }).json()
-        return response
-
-    def get_file_name(self, number, amount=None): #находит количество лайков для имя файла с фото
-        file = self.get_request(amount)
-        for info in file.items():
-            body = list(info[1].values())[1]
-            for k, v in body[number].items():
-                if k == 'likes':
-                    for element, likes in v.items():
-                        if element == 'count':
-                            return str(likes)
-
-    def photo_get(self, number, amount=None): #выдает размер фото и ссылку на него
-        file = self.get_request(amount)
-        for info in file.items():
-            val = list(info[1].values())[1]
-            for k, v in val[number].items():
-                if k == 'sizes':
-                    fotos = v
-            lengh = len(fotos)
-            foto = fotos[lengh - 1]
-            final = list(foto.values())
-            return (final[1], final[3])
-
-
-
-    def file_create(self,number): #создает файл с фотографией
-        p = self.photo_get(number)[1]
-        apiphoto = requests.get(p)
-        out = open(f'{self.get_file_name(number)}.jpeg', "wb")
-        out.write(apiphoto.content)
-        out.close()
-        return f'{self.get_file_name(number)}.jpeg'
-
-    def counter(self): #считает сколько у пользователя аватарок, чтобы знать, сколько раз нужно запустить код
-        file = self.get_request()
-        for info in file.items():
-            for count in info[1].values():
-                return count
-
-
-
-
-
-if __name__ == '__main__':
-    # # Получить токен от пользователя
-    tooken = "y0_AgAAAAA2r5qLAAjJIQAAAADV_tzPu-aTxlY5TDida9NxoAabFObV40Y"
-    uploader = YaUploader(tooken)
-    id_lina = '311750739'
-    id_sasha = '408198842'
-    ids = 'lina_not_cynical'
-    tokenVK = 'vk1.a.DlTR29AK9-veDvvqvGwmu1RRUP8F-E35NVuHpjtxAivDxwbySbpupsUDNio1Drs8nAK-yEE-PE1Ph856jJodugRpML1hWWNqzIBqDO9j7JBVVmOH03cTcoLCH-LQRkkA4Is59tY0JMTZ-FJ0IglixXl8pOPrSlFmous4c_3HSMxTw8KbNV86R6arqxZX1rrw'
-    test = VkRequester(tokenVK, ids)
-    test2 = test.get_file_name(1)
-    pprint(test2)
-    pprint(type(test2))
-
-    # for proccess in range(0, test.counter()):
-    #     uploader.upload(test.file_create(proccess))
-
+# conn.close()
