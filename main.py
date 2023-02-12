@@ -44,9 +44,6 @@ if __name__ == '__main__':
                         user.write_msg(user.get_person(c)[0:])
                         c += 1
 
-
-
-
                 elif request == "пока":
                     user.write_msg("Пока((")
                 else:

@@ -113,21 +113,21 @@ class VKbot:
         return f'{name} {surname}, ссылка на странницу: {url}'
 
     def photo_get(self, number):
+        id_ = self.parts[number]['id']
         response = vk2.method('photos.get', {
-            'owner_id': self.parts[number]['id'],
+            'owner_id': id_,
             'count': 25,
             'album_id': 'profile',
             'rev': 1
         })
         c = 0
-        listofphoto = []
         for info in list(response.values())[1]:
                 if c > 2:
                     break
-                photo = requests.get(info['sizes'][-1]['url'])
-                print(info['sizes'][-1]['url'])
+                ids = print(info['id'])
+                # photo = requests.get(info['sizes'][-1]['url'])
+                # print(info['sizes'][-1]['url'])
                 c += 1
-                listofphoto.append(photo)
-                vk.method('messages.send', {'user_id': self.user_id, 'attachment': photo+self.parts[number]['id']+, 'random_id': randrange(10 ** 7),'message': 'photo' })
+                vk.method('messages.send', {'user_id': self.user_id, 'attachment': f'photo{id_}_{ids}', 'random_id': randrange(10 ** 7)})
 
 
