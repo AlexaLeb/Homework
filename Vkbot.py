@@ -2,7 +2,6 @@ from random import randrange
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 import datetime
-import requests
 
 with open('tookenofbot.txt', 'r') as file:
     bot_token = file.readline()
@@ -19,8 +18,8 @@ class VKbot:
         self.user_info = self.get_user_id()
         self.parts = self.find_part()
 
-    def write_msg(self, message):
-        vk.method('messages.send', {'user_id': self.user_id, 'message': message, 'random_id': randrange(10 ** 7), })
+    def write_msg(self, message, attachment=None):
+        vk.method('messages.send', {'user_id': self.user_id, 'message': message, 'random_id': randrange(10 ** 7), 'attachment': attachment})
 
     def age(self, date: str) -> int:
         age = datetime.datetime.now().year - int(date[-4:])
@@ -31,6 +30,7 @@ class VKbot:
         response = vk.method('users.get', {'user_id': self.user_id,
                                            'v': 5.131,
                                            'fields': 'first_name, last_name, bdate, sex, city'})
+
         if response:
             for key, value in response[0].items():
                 if key == 'city':
@@ -44,14 +44,18 @@ class VKbot:
             self.write_msg('Ошибка')
         return user_info
 
-    def check_missing_info(self, user_info: dict):
+
+
+
+
+    def check_missing_info(self):
         # Записывает в словрь отсутствующую информацию
         info_missing = []
         for item in ['bdate', 'sex', 'city']:
-            if not user_info.get(item):
+            if not self.user_info.get(item):
                 info_missing.append(item)
-            if user_info.get('bdate'):
-                if len(user_info['bdate'].split('.')) != 3:
+            if self.user_info.get('bdate'):
+                if len(self.user_info['bdate'].split('.')) != 3:
                     info_missing.append('bdate')
         return info_missing
 
@@ -81,7 +85,9 @@ class VKbot:
         response = vk2.method('database.getCities', values=di)
         if response['items']:
             city_id = response['items'][0]['id']
-            return city_id
+            self.user_info['city'] = city_id
+            self.write_msg('указан город')
+            return True
         else:
             self.write_msg('неверно указан город')
             return False
@@ -118,16 +124,18 @@ class VKbot:
             'owner_id': id_,
             'count': 25,
             'album_id': 'profile',
-            'rev': 1
+            'rev': 1,
+            'extended': 1
         })
+        result = []
+        print(response['items'])
         c = 0
-        for info in list(response.values())[1]:
-                if c > 2:
-                    break
-                ids = print(info['id'])
-                # photo = requests.get(info['sizes'][-1]['url'])
-                # print(info['sizes'][-1]['url'])
+        while c < 2:
+            for foto in sorted(response['items'], key=lambda x: x['likes']['count'], reverse=True):
                 c += 1
-                vk.method('messages.send', {'user_id': self.user_id, 'attachment': f'photo{id_}_{ids}', 'random_id': randrange(10 ** 7)})
+                result.append(f"photo{foto['owner_id']}_{foto['id']}")
+                if len(result) == 3:
+                    break
+        return ','.join(result)
 
 
