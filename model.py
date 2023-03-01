@@ -29,14 +29,38 @@ class User(Base):
         return f'{self.id_user} {self.user_vk_id} {self.age}'
 
 
-class SeenPeople(Base):
-    __tablename__ = 'seenpeople'
-    id_seen = sq.Column(sq.Integer, primary_key=True)
-    user_vk_id = sq.Column(sq.Integer, unique=True, nullable=False)
+class Peopleforuser(Base):
+    __tablename__ = 'peopleforuser'
+    id_to_see = sq.Column(sq.Integer, primary_key=True)
+    user_vk_id = sq.Column(sq.Integer, nullable=False)
+    user_name = sq.Column(sq.String(40), nullable=False)
+    user_surname = sq.Column(sq.String(40), nullable=False)
+    link = sq.Column(sq.String(40), nullable=False)
     bot_id = sq.Column(sq.Integer, sq.ForeignKey('user.user_vk_id'))
 
     def __str__(self) -> str:
-        return f'{self.id_seen}: {self.user_vk_id}'
+        return f'{self.id_to_see} {self.user_vk_id} {self.user_name} {self.user_surname} {self.link}'
+
+
+def db_insert_to_see(person: list, id_vk):
+    for person in person:
+        if db_chek_user_exists(id_vk) is True:
+            new = Peopleforuser(
+                user_vk_id=person['id'],
+                user_name=person['first_name'],
+                user_surname=person['last_name'],
+                link=('vk.com/id' + str(person['id'])),
+                bot_id=id_vk
+            )
+            session.add(new)
+            session.commit()
+    return True
+
+
+def select_from_seen(offset, id_vk):
+    if db_chek_user_exists(id_vk) is True:
+        new = session.query(Peopleforuser).filter(Peopleforuser.bot_id == id_vk).offset(offset).first()
+        return new.__str__().split()
 
 
 def db_add_user(id_vk, age):
@@ -68,29 +92,7 @@ def db_chek_user_exists(id_vk) -> bool:
         return False
 
 
-def db_chek_user_seen(id_vk, main_id) -> bool:
-    new = session.query(SeenPeople).join(User, SeenPeople.bot_id == User.user_vk_id).filter_by(user_vk_id=main_id).first()
-    user = new.__str__().split()
-    print(int(user[1]))
-    if int(user[1]) == id_vk:
-        print('нашел')
-        return True
-    else:
-        print('не нашел')
-        return False
-
-
-def db_add_to_seen(vk_id, bot_id):
-    new = SeenPeople(
-        user_vk_id=vk_id,
-        bot_id=bot_id
-    )
-    session.add(new)
-    session.commit()
-    return True
-
-
 def creator():
-    # Base.metadata.drop_all(engine)
+    Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
     return True

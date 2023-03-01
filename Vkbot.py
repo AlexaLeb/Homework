@@ -3,7 +3,7 @@ import json
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 import datetime
-from model import db_add_user, db_chek_user_exists, db_get_age
+from model import db_add_user, db_chek_user_exists, db_get_age, db_insert_to_see, select_from_seen
 
 with open('tookenofbot.txt', 'r') as file:
     bot_token = file.readline()
@@ -15,6 +15,7 @@ longpoll = VkLongPoll(vk)
 
 
 class VKbot:
+
     def __init__(self, user_id: str):
         self.user_id = user_id
         self.user_info = self.get_user_id()
@@ -44,13 +45,19 @@ class VKbot:
         return str(keyboard.decode('utf-8'))
 
     def write_msg(self, message, attachment=None):
-        vk.method('messages.send', {'user_id': self.user_id, 'message': message, 'random_id': randrange(10 ** 7), 'attachment': attachment, 'keyboard': self.keyboard})
+        vk.method('messages.send', {'user_id': self.user_id, 'message': message, 'random_id': randrange(10 ** 7),
+                                    'attachment': attachment, 'keyboard': self.keyboard})
 
     def age(self, user_info) -> int:
         age = datetime.datetime.now().year - int(user_info[-4:])
         return age
 
     def get_user_id(self) -> dict:
+        """
+        Функция запрашивает по id информацию о пользователе, проверяет его страничку и если не получает всю нужную
+        информацию, то запрашивает её. Кроме того функция записывает id и возраст пользователя в базу данных
+        это нужно, чтобы не считать каждый раз его возраст, а запомнить его.
+        """
         user_info = {}
         response = vk.method('users.get', {'user_id': self.user_id,
                                            'v': 5.89,
@@ -85,7 +92,7 @@ class VKbot:
         return user_info
 
     def check_missing_info(self):
-        # Записывает в словрь отсутствующую информацию
+        # Записывает в словарь отсутствующую информацию
         info_missing = []
         for item in ['bdate', 'sex', 'city']:
             if not self.user_info.get(item):
@@ -130,7 +137,7 @@ class VKbot:
             self.write_msg('неверно указан город')
             return False
 
-    def find_part(self):
+    def find_part(self, offset=None):
         a = db_get_age(self.user_info['id'])
         response = vk2.method('users.search', {
             'age_from': a - 3,
@@ -139,30 +146,41 @@ class VKbot:
             'city': self.user_info['city'],
             'statis': 1 or 6,
             'has_photo': 1,
-            'count': 1000,
             'sort': 0,
             'v': 5.89,
             'is_closed': False,
-            'can_access_closed': True
+            'can_access_closed': True,
+            'count': 300,
+            'offset': offset
         })
 
         if response:
             if response.get('items'):
-                return response.get('items')
+                items_dict = []
+                for item in response.get('items'):
+                    print(item)
+                    if item['is_closed'] is False or item['can_access_closed'] is True:
+                        items_dict.append(item)
+                        print('выбрал')
+                    else:
+                        print('не выбрал')
+                db_insert_to_see(items_dict, self.user_id)
+                return items_dict
             else:
                 self.write_msg('ошибка')
                 return False
 
     def get_person(self, number=1) -> str:
-        name = self.parts[number]['first_name']
-        surname = self.parts[number]['last_name']
-        url = 'vk.com/id' + str(self.parts[number]['id'])
+        users = select_from_seen(number, self.user_id)
+        name = users[2]
+        surname = users[3]
+        url = users[4]
         return f'{name} {surname}, \nссылка на странницу: \n{url}'
 
     def photo_get(self, number):
-        id_ = self.parts[number]['id']
+        id_ = select_from_seen(number, self.user_id)
         response = vk2.method('photos.get', {
-            'owner_id': id_,
+            'owner_id': id_[1],
             'count': 25,
             'album_id': 'profile',
             'rev': 1,
@@ -170,10 +188,11 @@ class VKbot:
         })
         result = []
         c = 0
-        while c < 2:
-            for foto in sorted(response['items'], key=lambda x: x['likes']['count'], reverse=True):
-                c += 1
-                result.append(f"photo{foto['owner_id']}_{foto['id']}")
-                if len(result) == 3:
-                    break
-        return ','.join(result)
+        if response:
+            while c < 2:
+                for foto in sorted(response['items'], key=lambda x: x['likes']['count'], reverse=True):
+                    c += 1
+                    result.append(f"photo{foto['owner_id']}_{foto['id']}")
+                    if len(result) == 3:
+                        break
+            return ','.join(result)
